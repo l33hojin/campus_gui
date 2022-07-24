@@ -1,0 +1,4 @@
+<launch>
+  <node name="campus_gui_node" pkg="campus_gui" type="campus_gui_node" output="screen"/>
+  <node name="global_image_processing_node" pkg="campus_gui" type="global_image_processing_node" output="screen"/>
+</launch>
