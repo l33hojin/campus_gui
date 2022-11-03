@@ -3,8 +3,11 @@
 - Environment
 
 > OS : Ubuntu 20.04.3 LTS + ROS Noetic
+> 
 > CPU : i7-10700f
+> 
 > GPU : RTX 3090
+> 
 > RAM : 64GB
 
 - IDE : QT Designer / Visual Studio Code
