@@ -7,7 +7,7 @@
 > GPU : RTX 3090
 > RAM : 64GB
 
-IDE : QT Designer / Visual Studio Code
+- IDE : QT Designer / Visual Studio Code
 
 
 - Required Package
