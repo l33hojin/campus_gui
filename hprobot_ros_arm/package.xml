@@ -33,7 +33,6 @@
   <depend>libqt5-widgets</depend>
   <depend>message_runtime</depend>
 
-  <depend>serial</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>pcl_conversions</depend>

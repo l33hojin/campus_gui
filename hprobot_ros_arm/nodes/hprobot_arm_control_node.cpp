@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
   // set the window title as the node name
   w.setWindowTitle(QString::fromStdString(
                        ros::this_node::getName()));
+  w.setWindowFlag(Qt::FramelessWindowHint);
 
                        
   // load the icon from our qrc file and set it as the application icon

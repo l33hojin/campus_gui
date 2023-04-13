@@ -9,7 +9,6 @@ set(ROS_DEPENDS
   catkin
   roscpp
   std_msgs
-  serial
   sensor_msgs
   cv_bridge
   pcl_conversions
@@ -39,8 +38,6 @@ set(EXTERNAL_DEPENDS_LIB
   ${OpenCV_LIBRARIES}
   ${OpenCV_LIBS}
   ${realsense2_LIBRARY}
-
-  #${OpenCV_LIBS}
   )
 
 set(INCLUDE_DIRECTORIES
@@ -155,7 +152,7 @@ foreach(NODE_FILE ${NODES})
 
   add_executable(${NODE_NAME} ${NODE_FILE} ${HDRS} ${SRCS} ${UI} ${QRC})
   add_dependencies(${NODE_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-  target_link_libraries (${NODE_NAME} ${catkin_LIBRARIES}  ${EXTERNAL_DEPENDS_LIB})
+  target_link_libraries (${NODE_NAME} ${catkin_LIBRARIES} ${EXTERNAL_DEPENDS_LIB} ${realsense2_LIBRARY})
   target_include_directories(${NODE_NAME} PRIVATE "include/${PROJECT_NAME}/")
 
   list(APPEND NODE_LIST ${NODE_NAME})

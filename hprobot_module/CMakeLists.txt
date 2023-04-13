@@ -31,7 +31,9 @@ add_service_files(
     hprobot_marker_detector.srv
     hprobot_collision_generator.srv
 )
+
 generate_messages(DEPENDENCIES std_msgs)
+
 catkin_package(
     CATKIN_DEPENDS message_runtime
 )

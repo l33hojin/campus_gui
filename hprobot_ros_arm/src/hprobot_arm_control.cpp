@@ -1,6 +1,7 @@
 #include "hprobot_arm_control.h"
 #include "ui_hprobot_arm_control.h"
-
+#include <librealsense2/rsutil.h>
+#include <librealsense2/rs.hpp>
 HProbotArmControl::HProbotArmControl(QWidget *parent) :
   QWidget(parent),
   ui(new Ui::HProbotArmControl)
@@ -23,6 +24,11 @@ HProbotArmControl::HProbotArmControl(QWidget *parent) :
   QString text_log;
   text_log.sprintf("[INFO] [%lf] Hprobot Arm Control Node START",ros::Time::now().toSec());
   ui->textEdit_page2_execute_log->append(text_log);
+
+  ROS_INFO_NAMED("moveit_interface", "Reference frame: %s", move_group->getPlanningFrame().c_str());
+
+  // We can also print the name of the end-effector link for this group.
+  ROS_INFO_NAMED("moveit_interface", "End effector link: %s", move_group->getEndEffectorLink().c_str());
 
 
   /*visual_tools = new moveit_visual_tools::MoveItVisualTools(move_group->getPlanningFrame());
@@ -127,6 +133,7 @@ void HProbotArmControl::on_pushButton_page2_execute_detectmarker_clicked()
     ui->textEdit_page2_execute_log->append(text_log);
     ui->textEdit_page2_execute_log->setTextColor(QColor(0,0,0));
   }
+
 }
 
 
@@ -406,7 +413,6 @@ void HProbotArmControl::on_pushButton_page1_show_image_clicked()
 
 void HProbotArmControl::on_pushButton_page1_detect_board_clicked()
 {
-
     int squaresX = 8;//인쇄한 보드의 가로방향 마커 갯수
     int squaresY = 5;//인쇄한 보드의 세로방향 마커 갯수
     float squareLength = 30;//검은색 테두리 포함한 정사각형의 한변 길이, mm단위로 입력
@@ -414,24 +420,44 @@ void HProbotArmControl::on_pushButton_page1_detect_board_clicked()
     int dictionaryId = 11;//DICT_6X6_250=10
 
 
+    double intrinsic_parameter[9];
+    double discoeffs[4];
+
     cv::Mat t2c_rvec = (cv::Mat_<float>(3, 3));
     cv::Mat t2c_tvec = (cv::Mat_<float>(3, 1));
 
     ros::NodeHandle n_show_image;
     cv_bridge::CvImagePtr cv_ptr;
 
-    double intrinsic_parameter[9];
-    double discoeffs[4];
-
-    sensor_msgs::ImageConstPtr image_raw;
+    sensor_msgs::ImageConstPtr image_raw, depth_image_raw;
     sensor_msgs::CameraInfoConstPtr camera_info;
 
-    image_raw = ros::topic::waitForMessage<sensor_msgs::Image>("/camera/color/image_raw",n_show_image);
-    camera_info = ros::topic::waitForMessage<sensor_msgs::CameraInfo>("/camera/color/camera_info",n_show_image);
+    image_raw       = ros::topic::waitForMessage<sensor_msgs::Image>     ("/camera/color/image_raw",n_show_image);
+    depth_image_raw = ros::topic::waitForMessage<sensor_msgs::Image>     ("/camera/aligned_depth_to_color/image_raw",n_show_image);
+    camera_info     = ros::topic::waitForMessage<sensor_msgs::CameraInfo>("/camera/color/camera_info",n_show_image);
 
-    for(int i=0;i<9;i++){
+    n_show_image.shutdown();
+
+    for(int i=0;i<9;i++)
+    {
       intrinsic_parameter[i] = camera_info->K[i];
     }
+
+    RS_camera_info_.width = camera_info->width;    // Image Resoltusion width
+    RS_camera_info_.height = camera_info->height;  // Image Resoltusion height
+    RS_camera_info_.fx = camera_info->K[0];        // 초점거리 x
+    RS_camera_info_.fy = camera_info->K[4];        // 초점거리 y
+    RS_camera_info_.ppx = camera_info->K[2];       // 주점 x
+    RS_camera_info_.ppy = camera_info->K[5];       // 주점 y
+    RS_camera_info_.model = RS2_DISTORTION_MODIFIED_BROWN_CONRADY;
+
+    for(int i=0;i<5;i++)
+    {
+      RS_camera_info_.coeffs[i] = camera_info->D[i];
+    }
+
+    cv::Mat A(3, 3, CV_64FC1, intrinsic_parameter);	// camera matrix
+    cv::Mat distCoeffs(4, 1, CV_64FC1, discoeffs);
 
     try {
       cv_ptr = cv_bridge::toCvCopy(image_raw, sensor_msgs::image_encodings::BGR8);
@@ -439,10 +465,157 @@ void HProbotArmControl::on_pushButton_page1_detect_board_clicked()
       ROS_ERROR("Error!");
       return;
     }
-
     cv::Mat color_image = cv_ptr->image.clone();
-    
-    
 
-    n_show_image.shutdown();
+    cv::Mat depth_image;
+    cv_ptr = cv_bridge::toCvCopy(depth_image_raw, sensor_msgs::image_encodings::TYPE_16UC1);
+    cv_ptr->image.convertTo(depth_image, CV_32F, 0.001);
+
+
+    cv::Ptr<cv::aruco::DetectorParameters> detectorParams = cv::aruco::DetectorParameters::create();
+    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::PREDEFINED_DICTIONARY_NAME(dictionaryId));
+    cv::Ptr<cv::aruco::CharucoBoard> board = cv::aruco::CharucoBoard::create(squaresX, squaresY, squareLength, markerLength, dictionary);
+
+    std::vector<cv::Point2f> chessboard_corners;
+    std::vector<std::vector<cv::Point2f>> corners, rejected;
+    std::vector<int> ids;
+
+    cv::aruco::detectMarkers(color_image, board->dictionary, corners, ids, detectorParams, rejected);
+    if (ids.size() > 0)
+    {
+      cv::aruco::drawDetectedMarkers(color_image, corners);
+      std::vector<cv::Point2f> charucoCorners;
+      std::vector<int> charucoIds;
+      cv::aruco::interpolateCornersCharuco(corners, ids, color_image, board, charucoCorners, charucoIds);
+      // if at least one charuco corner detected
+
+      if (charucoIds.size() > 0)
+      {
+        cv::aruco::drawDetectedCornersCharuco(color_image, charucoCorners, charucoIds, cv::Scalar(255, 255, 0));
+        bool valid = cv::aruco::estimatePoseCharucoBoard(charucoCorners, charucoIds, board, A, distCoeffs, t2c_rvec, t2c_tvec);
+        //if (valid) cv::drawFrameAxes(color_image, A, distCoeffs, t2c_rvec, t2c_tvec, 100);
+
+        std::vector<cv::Point3f> axesPoints;
+        axesPoints.push_back(cv::Point3f(0, 0, 0));
+        //axesPoints.push_back(cv::Point3f(100, 0, 0));
+        //axesPoints.push_back(cv::Point3f(0,100, 0));
+        //axesPoints.push_back(cv::Point3f(0, 0, 100));
+        std::vector<cv::Point2f> imagePoints;
+        cv::projectPoints(axesPoints, t2c_rvec, t2c_tvec, A, distCoeffs, imagePoints);
+
+
+        float distance = depth_image.at<float>(imagePoints[0].y, imagePoints[0].x)*1000;
+        float op_point[3];
+        float pixel[2];
+
+        pixel[0] = imagePoints[0].x;
+        pixel[1] = imagePoints[0].y;
+
+        rs2_deproject_pixel_to_point(op_point, &RS_camera_info_, pixel, distance);
+
+        std::cout << op_point[0] << std::endl << op_point[1] << std::endl << op_point[2] << std::endl;
+
+        //std::cout << pixel[0] << std::endl << pixel[1] << std::endl;
+        //std::cout << " origin = " << t2c_tvec << std::endl;
+        cv::Mat RR;
+        cv::Rodrigues(t2c_rvec,RR);
+        //t2c_tvec = -RR.inv() * t2c_tvec;
+
+        /*t2c_tvec.at<float>(0,0) = op_point[0];
+        t2c_tvec.at<float>(1,0) = op_point[1];
+        t2c_tvec.at<float>(2,0) = op_point[2];*/
+
+        //cv::Rodrigues(rvec, R);.
+        std::cout << RR << std::endl;
+        std::cout << t2c_tvec << std::endl;
+
+
+      }
+    }
+    cv::Mat image_show = color_image.clone();
+    cv::cvtColor(image_show, image_show, CV_BGR2RGB);
+    cv::resize(image_show, image_show, cv::Size(640, 320));
+    ui->label_page1_color_image->setPixmap(QPixmap::fromImage(QImage(image_show.data, image_show.cols, image_show.rows, image_show.step, QImage::Format_RGB888)));
+
+    /*QString text_log;
+
+    text_log.sprintf("[INFO] [%lf] Get Current Pose Success",ros::Time::now().toSec());
+    ui->textEdit_page1_calibration_log->append(text_log);
+
+    text_log.sprintf("[INFO] [%lf] Position = [%.2lf, %.2lf, %.2lf]",ros::Time::now().toSec(), position[0], position[1], position[2]);
+    ui->textEdit_page1_calibration_log->append(text_log);
+
+    text_log.sprintf("[INFO] [%lf] Orientation = [%.2lf, %.2lf, %.2lf, %.2lf]",ros::Time::now().toSec(), orientation[0], orientation[1], orientation[2], orientation[3]);
+    ui->textEdit_page1_calibration_log->append(text_log);*/
+
+
+}
+
+void HProbotArmControl::on_pushButton_page1_get_match_clicked()
+{
+
+}
+
+void HProbotArmControl::on_pushButton_page0_main_moving_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(3);
+    ui->lineEdit_page3_coordinate_x->clear();
+    ui->lineEdit_page3_coordinate_y->clear();
+    ui->lineEdit_page3_coordinate_z->clear();
+}
+
+void HProbotArmControl::on_pushButton_page3_home_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(0);
+}
+
+void HProbotArmControl::on_pushButton_page3_execute_clicked()
+{
+    ros::AsyncSpinner spinner(4);
+    spinner.start();
+    geometry_msgs::Pose coordinate;
+
+
+    QString text_log;
+    text_log.sprintf("[INFO] [%lf] Manipulator Moving...' ",ros::Time::now().toSec());
+    ui->textEdit_page3_moving_log->append(text_log);
+
+    coordinate.position.x = ui->lineEdit_page3_coordinate_x->text().toDouble();
+    coordinate.position.y = ui->lineEdit_page3_coordinate_y->text().toDouble();
+    coordinate.position.z = ui->lineEdit_page3_coordinate_z->text().toDouble();
+
+
+    text_log.sprintf("[INFO] [%lf] Position = [%.2lf, %.2lf, %.2lf] ",ros::Time::now().toSec(),
+                     coordinate.position.x, coordinate.position.y, coordinate.position.z);
+    ui->textEdit_page3_moving_log->append(text_log);
+
+    coordinate.orientation.w = 1;
+    coordinate.orientation.x = 0;
+    coordinate.orientation.y = 0;
+    coordinate.orientation.z = 0;
+
+    text_log.sprintf("[INFO] [%lf] orientation = [%.2lf, %.2lf, %.2lf, %.2lf] ",ros::Time::now().toSec(),
+                     coordinate.orientation.w, coordinate.orientation.x, coordinate.orientation.y, coordinate.orientation.z);
+    ui->textEdit_page3_moving_log->append(text_log);
+
+    move_group->setStartState(*move_group->getCurrentState());
+    move_group->setPoseTarget(coordinate);
+    move_group->setGoalOrientationTolerance(0.1);
+    bool success = (move_group->plan(saved_plan) == moveit::core::MoveItErrorCode::SUCCESS);
+    if(success)
+    {
+        text_log.sprintf("[INFO] [%lf] Planning Success! Saved Plan Execute... ",ros::Time::now().toSec());
+        ui->textEdit_page3_moving_log->append(text_log);
+        move_group->execute(saved_plan);
+    }
+    else
+    {
+        text_log.sprintf("[INFO] [%lf] Failed. ",ros::Time::now().toSec());
+        ui->textEdit_page3_moving_log->append(text_log);
+    }
+
+
+    text_log.sprintf("[INFO] [%lf] Finish! ",ros::Time::now().toSec());
+    ui->textEdit_page3_moving_log->append(text_log);
+    spinner.stop();
 }

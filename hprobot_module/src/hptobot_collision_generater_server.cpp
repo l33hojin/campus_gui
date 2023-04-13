@@ -27,12 +27,12 @@ class collision_generator
     static const std::string PLANNING_GROUP = "interbotix_arm";
     move_group = new moveit::planning_interface::MoveGroupInterface(PLANNING_GROUP);
     joint_model_group = move_group->getCurrentState()->getJointModelGroup(PLANNING_GROUP);
-    visual_tools = new moveit_visual_tools::MoveItVisualTools(move_group->getPlanningFrame());
-    visual_tools->deleteAllMarkers();
-    text_pose = Eigen::Isometry3d::Identity();
-    text_pose.translation().z() = 1;
-    visual_tools->publishText(text_pose, "hprobot_arm", rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
-    visual_tools->trigger();
+    //visual_tools = new moveit_visual_tools::MoveItVisualTools(move_group->getPlanningFrame());
+    //visual_tools->deleteAllMarkers();
+    //text_pose = Eigen::Isometry3d::Identity();
+    //text_pose.translation().z() = 1;
+    //visual_tools->publishText(text_pose, "hprobot_arm", rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
+    //visual_tools->trigger();
 
     collision_object.operation = collision_object.ADD;
     collision_object.header.frame_id = move_group->getPlanningFrame();

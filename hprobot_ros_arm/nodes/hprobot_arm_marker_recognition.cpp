@@ -96,7 +96,7 @@ class image_processing
     cv::Mat distCoeffs(4, 1, CV_64FC1, discoeffs);
     cv::Mat objPoints(4, 1, CV_32FC3);
     objPoints.ptr<cv::Vec3f>(0)[0] = cv::Vec3f(0, markerLength, 0);
-    objPoints.ptr<cv::Vec3f>(0)[1] = cv::Vec3f(markerLength, markerLength, 0);
+    objPoints.ptr<cv::Vec3f>(0)[1] = cv::Vec3f(￩markerLength, markerLength, 0);
     objPoints.ptr<cv::Vec3f>(0)[2] = cv::Vec3f(markerLength, 0, 0);
     objPoints.ptr<cv::Vec3f>(0)[3] = cv::Vec3f(0, 0, 0);
 

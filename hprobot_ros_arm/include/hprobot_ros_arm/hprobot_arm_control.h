@@ -1,6 +1,10 @@
 #ifndef HPROBOT_ARM_CONTROL_H
 #define HPROBOT_ARM_CONTROL_H
 
+
+#include <librealsense2/rsutil.h>
+#include <librealsense2/rs.hpp>
+
 #include <iostream>
 
 // Hprobot module
@@ -61,8 +65,6 @@
 
 #include <cv_bridge/cv_bridge.h>
 
-#include <librealsense2/rsutil.h>
-#include <librealsense2/rs.hpp>
 
 namespace Ui {
 class HProbotArmControl;
@@ -86,7 +88,7 @@ public:
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;  // Not applied in this demo but would be used to add objects to the world
   static const std::string PLANNING_GROUP;
   ros::NodeHandlePtr n;
-
+  rs2_intrinsics RS_camera_info_;
   cv::Mat marker2camera;
 
 private slots:
@@ -108,6 +110,14 @@ private slots:
 
   void on_pushButton_page1_detect_board_clicked();
   
+  void on_pushButton_page1_get_match_clicked();
+
+  void on_pushButton_page0_main_moving_clicked();
+
+  void on_pushButton_page3_home_clicked();
+
+  void on_pushButton_page3_execute_clicked();
+
 private:
   Ui::HProbotArmControl *ui;
   QTimer *ros_timer;
